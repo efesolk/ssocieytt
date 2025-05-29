@@ -8,11 +8,23 @@ import {
   getDocs,
   arrayUnion,
   arrayRemove,
-  serverTimestamp 
+  serverTimestamp,
+  setDoc 
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { firestore, storage } from '../firebase/config';
 import { User } from '../models/types';
+
+export const checkUsernameAvailability = async (username: string): Promise<boolean> => {
+  try {
+    const q = query(collection(firestore, 'users'), where('username', '==', username.toLowerCase()));
+    const snapshot = await getDocs(q);
+    return snapshot.empty;
+  } catch (error) {
+    console.error('Error checking username:', error);
+    throw error;
+  }
+};
 
 export const getUserById = async (userId: string): Promise<User | null> => {
   try {
@@ -35,6 +47,13 @@ export const updateUserProfile = async (
     displayName?: string;
     bio?: string;
     profileImage?: File;
+    settings?: {
+      theme?: 'light' | 'dark';
+      privacy?: {
+        profileVisibility?: 'public' | 'private';
+        messagePermission?: 'everyone' | 'following';
+      };
+    };
   }
 ): Promise<void> => {
   try {
@@ -48,6 +67,10 @@ export const updateUserProfile = async (
 
     if (data.bio !== undefined) {
       updateData.bio = data.bio;
+    }
+
+    if (data.settings) {
+      updateData.settings = data.settings;
     }
 
     // Upload profile image if provided
@@ -119,6 +142,27 @@ export const unfollowUser = async (currentUserId: string, targetUserId: string):
     });
   } catch (error) {
     console.error('Error unfollowing user:', error);
+    throw error;
+  }
+};
+
+export const updateUserSettings = async (
+  userId: string,
+  settings: {
+    theme?: 'light' | 'dark';
+    privacy?: {
+      profileVisibility?: 'public' | 'private';
+      messagePermission?: 'everyone' | 'following';
+    };
+  }
+): Promise<void> => {
+  try {
+    await updateDoc(doc(firestore, 'users', userId), {
+      settings,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error updating user settings:', error);
     throw error;
   }
 };
