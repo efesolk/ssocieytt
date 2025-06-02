@@ -60,7 +60,7 @@ export default function NotificationsPage() {
         <BellIcon className="w-6 h-6" /> Bildirimler
       </h1>
       {notifications.length === 0 ? (
-        <p className="text-gray-500">Henüz bildirimin yok.</p>
+        <p className="text-gray-500">yakında...</p>
       ) : (
         <ul className="space-y-4">
           {notifications.map((notif) => (
