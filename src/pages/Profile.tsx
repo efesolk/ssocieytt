@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { User, MessageSquare, Settings, Users, ExternalLink, Gamepad } from 'lucide-react';
+import { User, MessageSquare, Settings, Users, Calendar, MapPin } from 'lucide-react';
 import { doc, getDoc, collection, query, where, getDocs, orderBy, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import PostCard from '../components/feed/PostCard';
 import Loading from '../components/ui/Loading';
+import toast from 'react-hot-toast';
 
 const Profile: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -38,6 +39,7 @@ const Profile: React.FC = () => {
           }
         }
 
+        // Fetch user's posts
         const q = query(
           collection(db, 'posts'),
           where('author.id', '==', id),
@@ -62,7 +64,7 @@ const Profile: React.FC = () => {
   }, [id, user]);
 
   const handleFollow = async () => {
-    if (!user || !id) return;
+    if (!user || !id || user.uid === id) return;
 
     try {
       const userRef = doc(db, 'users', id);
@@ -77,6 +79,7 @@ const Profile: React.FC = () => {
           following: arrayRemove(id)
         });
         setFollowerCount(prev => prev - 1);
+        toast.success('Unfollowed successfully');
       } else {
         // Follow
         await updateDoc(userRef, {
@@ -86,11 +89,31 @@ const Profile: React.FC = () => {
           following: arrayUnion(id)
         });
         setFollowerCount(prev => prev + 1);
+        
+        // Create notification for the followed user
+        const notificationData = {
+          userId: id,
+          type: 'follow',
+          from: {
+            id: user.uid,
+            username: user.displayName || user.email?.split('@')[0],
+            displayName: user.displayName || user.email?.split('@')[0],
+            photoURL: user.photoURL || ''
+          },
+          content: `${user.displayName || user.email?.split('@')[0]} started following you`,
+          resourceId: '',
+          createdAt: new Date(),
+          read: false
+        };
+        
+        await addDoc(collection(db, 'notifications'), notificationData);
+        toast.success('Following successfully');
       }
 
       setIsFollowing(!isFollowing);
     } catch (error) {
       console.error('Error updating follow status:', error);
+      toast.error('Failed to update follow status');
     }
   };
 
@@ -110,10 +133,12 @@ const Profile: React.FC = () => {
   return (
     <div className="max-w-3xl mx-auto">
       <div className={`rounded-xl shadow-md overflow-hidden ${darkMode ? 'bg-gray-800' : 'bg-white'} mb-6`}>
-        {/* Profile Header */}
-        <div className="h-0"></div>
-        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/50 to-transparent"></div>
-        <div className="px-6 py-4">
+        {/* Cover Photo */}
+        <div className="h-32 bg-gradient-to-r from-purple-500 to-pink-500 relative">
+          <div className="absolute inset-0 bg-black bg-opacity-20"></div>
+        </div>
+        
+        <div className="px-6 py-4 relative">
           <div className="flex flex-col md:flex-row">
             {/* Profile Picture */}
             <div className="md:mr-6 flex flex-col items-center md:items-start">
@@ -131,6 +156,17 @@ const Profile: React.FC = () => {
                 <div>
                   <h1 className="text-2xl font-bold">{profile.displayName}</h1>
                   <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>@{profile.username}</p>
+                  {profile.createdAt && (
+                    <div className={`flex items-center mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      <Calendar size={16} className="mr-1" />
+                      <span className="text-sm">
+                        Joined {new Date(profile.createdAt.toDate()).toLocaleDateString('en-US', { 
+                          month: 'long', 
+                          year: 'numeric' 
+                        })}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="mt-4 md:mt-0 flex flex-col md:items-end space-y-2">
@@ -168,7 +204,9 @@ const Profile: React.FC = () => {
                 </div>
               </div>
               
-              <p className="mt-4">{profile.bio}</p>
+              {profile.bio && (
+                <p className="mt-4">{profile.bio}</p>
+              )}
               
               {/* Stats */}
               <div className="flex justify-start space-x-6 mt-4">
@@ -185,49 +223,6 @@ const Profile: React.FC = () => {
                   <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Posts</div>
                 </div>
               </div>
-              
-              {/* Game IDs */}
-              {profile.gameIds && Object.keys(profile.gameIds).length > 0 && (
-                <div className="mt-6">
-                  <h3 className="font-medium mb-2">Game IDs</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {Object.entries(profile.gameIds).map(([game, id]: [string, any]) => (
-                      <a
-                        key={game}
-                        href={`https://tracker.gg/${game === 'leagueoflegends' ? 'lol' : game}/profile/${encodeURIComponent(id)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`flex items-center p-3 rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'} transition`}
-                      >
-                        <Gamepad className="mr-2 w-5 h-5" />
-                        <div>
-                          <div className="font-medium capitalize">{game.replace(/([A-Z])/g, ' $1').trim()}</div>
-                          <div className="text-sm text-gray-500">{id}</div>
-                        </div>
-                        <ExternalLink size={14} className="ml-auto text-gray-500" />
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* Social Links */}
-              {profile.socialLinks && Object.keys(profile.socialLinks).length > 0 && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {Object.entries(profile.socialLinks).map(([platform, url]: [string, any]) => (
-                    <a
-                      key={platform}
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`px-4 py-2 rounded-lg text-sm ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'} flex items-center transition`}
-                    >
-                      <span className="capitalize mr-1">{platform}</span>
-                      <ExternalLink size={12} />
-                    </a>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -286,7 +281,7 @@ const Profile: React.FC = () => {
         {tab === 'media' && (
           <div className={`p-8 text-center rounded-xl shadow-md ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
             <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Media tab content will be displayed here
+              Media content will be displayed here
             </p>
           </div>
         )}
@@ -294,7 +289,7 @@ const Profile: React.FC = () => {
         {tab === 'likes' && (
           <div className={`p-8 text-center rounded-xl shadow-md ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
             <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Likes tab content will be displayed here
+              Liked posts will be displayed here
             </p>
           </div>
         )}

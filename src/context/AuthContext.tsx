@@ -9,7 +9,7 @@ import {
   sendPasswordResetEmail, 
   sendEmailVerification 
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, query, collection, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import toast from 'react-hot-toast';
 
@@ -61,8 +61,20 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
     return () => unsubscribe();
   }, []);
 
+  const checkUsernameExists = async (username: string): Promise<boolean> => {
+    const q = query(collection(db, 'users'), where('username', '==', username.toLowerCase()));
+    const querySnapshot = await getDocs(q);
+    return !querySnapshot.empty;
+  };
+
   const registerWithEmail = async (email: string, password: string, username: string) => {
     try {
+      // Check if username already exists
+      const usernameExists = await checkUsernameExists(username);
+      if (usernameExists) {
+        throw new Error('Username already taken');
+      }
+
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       await sendEmailVerification(userCredential.user);
       
@@ -71,19 +83,26 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       await setDoc(userDoc, {
         uid: userCredential.user.uid,
         email,
-        username,
+        username: username.toLowerCase(),
         displayName: username,
         photoURL: '',
         createdAt: serverTimestamp(),
         isPrivate: false,
         gameIds: {},
         bio: '',
-        socialLinks: {}
+        socialLinks: {},
+        followers: [],
+        following: [],
+        savedPosts: []
       });
       
       toast.success('Registration successful! Please verify your email.');
     } catch (error: any) {
-      toast.error(error.message);
+      if (error.message === 'Username already taken') {
+        toast.error('Username already taken. Please choose a different one.');
+      } else {
+        toast.error(error.message);
+      }
       throw error;
     }
   };
@@ -108,18 +127,32 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       const userSnapshot = await getDoc(userDoc);
       
       if (!userSnapshot.exists()) {
+        // Generate unique username from email
+        let baseUsername = result.user.email?.split('@')[0]?.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'user';
+        let username = baseUsername;
+        let counter = 1;
+        
+        // Check if username exists and generate unique one
+        while (await checkUsernameExists(username)) {
+          username = `${baseUsername}${counter}`;
+          counter++;
+        }
+        
         // Create new user profile
         await setDoc(userDoc, {
           uid: result.user.uid,
           email: result.user.email,
-          username: result.user.displayName?.replace(/\s+/g, '').toLowerCase() || '',
-          displayName: result.user.displayName || '',
+          username: username,
+          displayName: result.user.displayName || username,
           photoURL: result.user.photoURL || '',
           createdAt: serverTimestamp(),
           isPrivate: false,
           gameIds: {},
           bio: '',
-          socialLinks: {}
+          socialLinks: {},
+          followers: [],
+          following: [],
+          savedPosts: []
         });
       }
       

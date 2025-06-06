@@ -18,6 +18,8 @@ import PostDetail from './pages/PostDetail';
 import NotFound from './pages/NotFound';
 import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
+import Notifications from './pages/Notifications';
+import LiveStream from './pages/LiveStream';
 
 // Components
 import Layout from './components/layout/Layout';
@@ -75,6 +77,8 @@ function App() {
                 <Route path="/settings" element={<ProtectedRoute><Layout><Settings setLocale={setLocale} /></Layout></ProtectedRoute>} />
                 <Route path="/messages" element={<ProtectedRoute><Layout><Messages /></Layout></ProtectedRoute>} />
                 <Route path="/messages/:id" element={<ProtectedRoute><Layout><Messages /></Layout></ProtectedRoute>} />
+                <Route path="/notifications" element={<ProtectedRoute><Layout><Notifications /></Layout></ProtectedRoute>} />
+                <Route path="/live-stream" element={<ProtectedRoute><Layout><LiveStream /></Layout></ProtectedRoute>} />
                 <Route path="/post/:id" element={<ProtectedRoute><Layout><PostDetail /></Layout></ProtectedRoute>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

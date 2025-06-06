@@ -9,6 +9,31 @@ export const likePost = async (postId: string, userId: string, like: boolean) =>
       await updateDoc(postRef, {
         likes: arrayUnion(userId)
       });
+      
+      // Create notification for post author
+      const postDoc = await getDoc(postRef);
+      if (postDoc.exists()) {
+        const postData = postDoc.data();
+        if (postData.author.id !== userId) {
+          const userDoc = await getDoc(doc(db, 'users', userId));
+          const userData = userDoc.data();
+          
+          await addDoc(collection(db, 'notifications'), {
+            userId: postData.author.id,
+            type: 'like',
+            from: {
+              id: userId,
+              username: userData?.username,
+              displayName: userData?.displayName,
+              photoURL: userData?.photoURL || ''
+            },
+            content: `${userData?.displayName} liked your post`,
+            resourceId: postId,
+            createdAt: serverTimestamp(),
+            read: false
+          });
+        }
+      }
     } else {
       await updateDoc(postRef, {
         likes: arrayRemove(userId)
@@ -76,10 +101,29 @@ export const addComment = async (postId: string, userId: string, comment: string
     const postRef = doc(db, 'posts', postId);
     const postSnap = await getDoc(postRef);
     const currentCount = postSnap.data()?.commentsCount || 0;
+    const postData = postSnap.data();
     
     await updateDoc(postRef, {
       commentsCount: currentCount + 1
     });
+    
+    // Create notification for post author
+    if (postData && postData.author.id !== userId) {
+      await addDoc(collection(db, 'notifications'), {
+        userId: postData.author.id,
+        type: 'comment',
+        from: {
+          id: userId,
+          username: userData?.username,
+          displayName: userData?.displayName,
+          photoURL: userData?.photoURL || ''
+        },
+        content: `${userData?.displayName} commented on your post`,
+        resourceId: postId,
+        createdAt: serverTimestamp(),
+        read: false
+      });
+    }
   } catch (error) {
     console.error('Error adding comment:', error);
     throw error;
